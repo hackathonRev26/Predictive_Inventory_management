@@ -3,6 +3,7 @@ import {
   clearInventoryOverrides,
   loadInventoryOverrides,
   mergeInventoryWithOverrides,
+  normalizeBaseKey,
   saveInventoryOverrides,
 } from "../utils/inventoryLocalStorage";
 
@@ -115,6 +116,24 @@ function createId() {
   return `ingredient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function buildBackendSafeOverrides(overrides, baseInventory) {
+  const baseIds = new Set((baseInventory || []).map((item) => normalizeBaseKey(item.name)));
+  const editsById = overrides?.editsById || {};
+  const deletedIds = overrides?.deletedIds || [];
+
+  const sanitizedEditsById = Object.fromEntries(
+    Object.entries(editsById).filter(([id]) => !baseIds.has(id))
+  );
+
+  const sanitizedDeletedIds = deletedIds.filter((id) => !baseIds.has(id));
+
+  return {
+    editsById: sanitizedEditsById,
+    deletedIds: sanitizedDeletedIds,
+    addedItems: Array.isArray(overrides?.addedItems) ? overrides.addedItems : [],
+  };
+}
+
 function InventoryDashboard({
   initialInventory = [],
   analytics,
@@ -151,7 +170,9 @@ function InventoryDashboard({
   const menuRef = useRef(null);
   const backendAuthoritativeMode = backendConnected;
 
-  const effectiveOverrides = overrides;
+  const effectiveOverrides = backendConnected
+    ? buildBackendSafeOverrides(overrides, initialInventory)
+    : overrides;
 
   const inventory = useMemo(() => {
     return mergeInventoryWithOverrides(initialInventory, effectiveOverrides);
@@ -160,6 +181,25 @@ function InventoryDashboard({
   useEffect(() => {
     saveInventoryOverrides(overrides);
   }, [overrides]);
+
+  useEffect(() => {
+    if (!backendConnected) {
+      return;
+    }
+
+    const sanitized = buildBackendSafeOverrides(overrides, initialInventory);
+    const hasDifferences =
+      Object.keys(sanitized.editsById).length !== Object.keys(overrides.editsById || {}).length ||
+      sanitized.deletedIds.length !== (overrides.deletedIds || []).length;
+
+    if (hasDifferences) {
+      setOverrides((prev) => ({
+        ...prev,
+        editsById: sanitized.editsById,
+        deletedIds: sanitized.deletedIds,
+      }));
+    }
+  }, [backendConnected, initialInventory, overrides]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -249,6 +289,11 @@ function InventoryDashboard({
   };
 
   const openEditModal = (item) => {
+    if (backendConnected && item.source === "base") {
+      alert("Live backend ingredients cannot be edited locally. Use Refill or backend inventory updates.");
+      return;
+    }
+
     setFormError("");
     setEditorMode("edit");
     setFormValues({
@@ -361,6 +406,11 @@ function InventoryDashboard({
   };
 
   const requestDelete = (item) => {
+    if (backendConnected && item.source === "base") {
+      alert("Live backend ingredients cannot be deleted locally.");
+      return;
+    }
+
     setOpenMenuId(null);
 
     if (skipDeleteWarning) {
