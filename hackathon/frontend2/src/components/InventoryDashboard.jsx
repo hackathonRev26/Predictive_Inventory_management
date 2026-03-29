@@ -151,9 +151,7 @@ function InventoryDashboard({
   const menuRef = useRef(null);
   const backendAuthoritativeMode = backendConnected;
 
-  const effectiveOverrides = backendConnected
-    ? { editsById: {}, deletedIds: [], addedItems: [] }
-    : overrides;
+  const effectiveOverrides = overrides;
 
   const inventory = useMemo(() => {
     return mergeInventoryWithOverrides(initialInventory, effectiveOverrides);
@@ -162,22 +160,6 @@ function InventoryDashboard({
   useEffect(() => {
     saveInventoryOverrides(overrides);
   }, [overrides]);
-
-  useEffect(() => {
-    if (!backendConnected) {
-      return;
-    }
-
-    const hasOverrides =
-      Object.keys(overrides.editsById || {}).length > 0 ||
-      (overrides.deletedIds || []).length > 0 ||
-      (overrides.addedItems || []).length > 0;
-
-    if (hasOverrides) {
-      clearInventoryOverrides();
-      setOverrides(loadInventoryOverrides());
-    }
-  }, [backendConnected]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -605,7 +587,7 @@ function InventoryDashboard({
             <h2>Current Inventory</h2>
             <p>
               {backendAuthoritativeMode
-                ? "Live backend inventory. Refill actions sync directly to backend."
+                ? "Live backend inventory with per-card edit/delete controls and delete confirmation."
                 : "Use the 3-dot menu to edit or delete items, sort the grid, or add a new ingredient at the end."}
             </p>
           </div>
@@ -625,11 +607,9 @@ function InventoryDashboard({
               </select>
             </label>
 
-            {!backendAuthoritativeMode && (
-              <button className="reset-btn" onClick={handleResetLocalChanges}>
-                Reset Local Changes
-              </button>
-            )}
+            <button className="reset-btn" onClick={handleResetLocalChanges}>
+              Reset Local Changes
+            </button>
           </div>
         </div>
 
@@ -641,36 +621,34 @@ function InventoryDashboard({
 
             return (
               <div className="inventory-card" key={item.id}>
-                {!backendAuthoritativeMode && (
-                  <div className="card-menu-wrap">
-                    <button
-                      className="menu-trigger"
-                      onClick={() =>
-                        setOpenMenuId((prev) => (prev === item.id ? null : item.id))
-                      }
-                      aria-label={`Open menu for ${formatName(item.name)}`}
-                    >
-                      ⋯
-                    </button>
+                <div className="card-menu-wrap">
+                  <button
+                    className="menu-trigger"
+                    onClick={() =>
+                      setOpenMenuId((prev) => (prev === item.id ? null : item.id))
+                    }
+                    aria-label={`Open menu for ${formatName(item.name)}`}
+                  >
+                    ⋯
+                  </button>
 
-                    {openMenuId === item.id && (
-                      <div className="card-menu">
-                        <button
-                          className="card-menu-item"
-                          onClick={() => openEditModal(item)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="card-menu-item danger"
-                          onClick={() => requestDelete(item)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  {openMenuId === item.id && (
+                    <div className="card-menu">
+                      <button
+                        className="card-menu-item"
+                        onClick={() => openEditModal(item)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="card-menu-item danger"
+                        onClick={() => requestDelete(item)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <img
                   className="ingredient-image"
@@ -715,15 +693,13 @@ function InventoryDashboard({
             );
           })}
 
-          {!backendAuthoritativeMode && (
-            <button className="add-ingredient-card" onClick={openAddModal}>
-              <div className="add-card-icon">＋</div>
-              <div className="add-card-text">
-                <strong>Add Ingredient</strong>
-                <span>Create a new inventory item</span>
-              </div>
-            </button>
-          )}
+          <button className="add-ingredient-card" onClick={openAddModal}>
+            <div className="add-card-icon">＋</div>
+            <div className="add-card-text">
+              <strong>Add Ingredient</strong>
+              <span>Create a new inventory item</span>
+            </div>
+          </button>
         </div>
       </section>
 
